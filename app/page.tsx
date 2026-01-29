@@ -1,65 +1,264 @@
-import Image from "next/image";
+"use client";
+
+import { useEffect, useState } from "react";
+
+interface RegistroFiscal {
+  RFC: string;
+  PERIODO: string;
+  APROBACION: boolean | null;
+  NOMBRE: string;
+}
+
+interface Toast {
+  message: string;
+  type: "success" | "error";
+}
 
 export default function Home() {
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
+  const [registros, setRegistros] = useState<RegistroFiscal[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [toast, setToast] = useState<Toast | null>(null);
+
+  const showToast = (message: string, type: "success" | "error" = "success") => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  const fetchRegistros = async () => {
+    const res = await fetch("/api/registros");
+    const data = await res.json();
+    setRegistros(Array.isArray(data) ? data : []);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    fetchRegistros();
+  }, []);
+
+  const actualizarRegistro = async (RFC: string, aprobacion: boolean) => {
+    await fetch("/api/registros", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rfc: RFC, aprobacion }),
+    });
+
+    showToast(
+      aprobacion
+        ? `RFC ${RFC} aprobado correctamente`
+        : `RFC ${RFC} rechazado correctamente`,
+      "success"
+    );
+
+    fetchRegistros();
+  };
+
+  if (loading) {
+    return (
+      <main style={styles.center}>
+        <p>Cargando registros...</p>
       </main>
-    </div>
+    );
+  }
+
+  return (
+    <main style={styles.container}>
+      <h1 style={styles.title}>Registros Fiscales</h1>
+
+      {registros.length === 0 && (
+        <p style={styles.empty}>No hay registros</p>
+      )}
+
+      {registros.map((registro, index) => {
+        const aprobado = registro.APROBACION === true;
+        const rechazado = registro.APROBACION === false;
+
+        return (
+          <div key={`${registro.RFC}-${index}`} style={styles.card}>
+            <div style={styles.cardHeader}>
+              <span style={styles.rfc}>{registro.RFC}</span>
+              <span
+                style={{
+                  ...styles.badge,
+                  ...(registro.APROBACION === null
+                    ? styles.badgePending
+                    : aprobado
+                    ? styles.badgeApproved
+                    : styles.badgeRejected),
+                }}
+              >
+                {registro.APROBACION === null
+                  ? "Pendiente"
+                  : aprobado
+                  ? "Aprobado"
+                  : "Rechazado"}
+              </span>
+            </div>
+
+            <p><strong>Cliente:</strong> {registro.NOMBRE}</p>
+            <p style={styles.periodo}>
+              <strong>Periodo:</strong> {registro.PERIODO}
+            </p>
+
+            <div style={styles.actions}>
+              <button
+                style={{
+                  ...styles.button,
+                  ...styles.approve,
+                  ...(aprobado && styles.disabled),
+                }}
+                disabled={aprobado}
+                onClick={() => actualizarRegistro(registro.RFC, true)}
+              >
+                Aprobar
+              </button>
+
+              <button
+                style={{
+                  ...styles.button,
+                  ...styles.reject,
+                  ...(rechazado && styles.disabled),
+                }}
+                disabled={rechazado}
+                onClick={() => actualizarRegistro(registro.RFC, false)}
+              >
+                Rechazar
+              </button>
+
+              <a
+                href={`/${registro.RFC}.pdf`}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ ...styles.button, ...styles.pdf }}
+              >
+                Descargar PDF
+              </a>
+            </div>
+          </div>
+        );
+      })}
+
+      {toast && (
+        <div
+          style={{
+            ...styles.toast,
+            ...(toast.type === "success"
+              ? styles.toastSuccess
+              : styles.toastError),
+          }}
+        >
+          {toast.message}
+        </div>
+      )}
+    </main>
   );
 }
+
+/* 🎨 Styles */
+const styles: Record<string, React.CSSProperties> = {
+  container: {
+    maxWidth: 900,
+    margin: "0 auto",
+    padding: 24,
+    fontFamily: "system-ui, sans-serif",
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: 700,
+    marginBottom: 24,
+  },
+  empty: {
+    color: "#666",
+  },
+  card: {
+    background: "#fff",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+  },
+  cardHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  rfc: {
+    fontWeight: 600,
+    fontSize: 16,
+  },
+  periodo: {
+    marginBottom: 12,
+    color: "#444",
+  },
+  badge: {
+    padding: "4px 10px",
+    borderRadius: 999,
+    fontSize: 12,
+    fontWeight: 600,
+  },
+  badgePending: {
+    background: "#FEF3C7",
+    color: "#92400E",
+  },
+  badgeApproved: {
+    background: "#DCFCE7",
+    color: "#166534",
+  },
+  badgeRejected: {
+    background: "#FEE2E2",
+    color: "#991B1B",
+  },
+  actions: {
+    display: "flex",
+    gap: 12,
+    marginTop: 12,
+    flexWrap: "wrap",
+  },
+  button: {
+    padding: "8px 14px",
+    borderRadius: 8,
+    border: "none",
+    cursor: "pointer",
+    fontWeight: 600,
+    textDecoration: "none",
+  },
+  approve: {
+    background: "#16A34A",
+    color: "#fff",
+  },
+  reject: {
+    background: "#DC2626",
+    color: "#fff",
+  },
+  pdf: {
+    background: "#2563EB",
+    color: "#fff",
+  },
+  disabled: {
+    opacity: 0.5,
+    cursor: "not-allowed",
+  },
+  toast: {
+    position: "fixed",
+    bottom: 24,
+    right: 24,
+    padding: "12px 16px",
+    borderRadius: 8,
+    color: "#fff",
+    fontWeight: 600,
+    boxShadow: "0 6px 16px rgba(0,0,0,0.2)",
+    zIndex: 1000,
+  },
+  toastSuccess: {
+    background: "#16A34A",
+  },
+  toastError: {
+    background: "#DC2626",
+  },
+  center: {
+    height: "100vh",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+};
